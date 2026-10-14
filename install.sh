@@ -11,11 +11,15 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 case "${1:-install}" in
 install)
-  [ -d build/CalSync.app ] || ./build.sh
+  if [ ! -d build/CalSync.app ]; then
+    command -v swiftc >/dev/null || { echo "swiftc fehlt: erst 'xcode-select --install', dann nochmal."; exit 1; }
+    echo "Baue CalSync (dauert ca. 1 Minute) ..."
+    ./build.sh
+  fi
   mkdir -p "$HOME/Applications"
   rm -rf "$APP" && cp -R build/CalSync.app "$APP"
   xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
-  echo "Kalenderzugriff anfragen (Dialog bestätigen) ..."
+  echo "Kalenderzugriff anfragen: Dialog bestätigen (liegt evtl. hinter anderen Fenstern) ..."
   ./calsync list
   if [ ! -f "$CFG" ]; then
     mkdir -p "$(dirname "$CFG")"

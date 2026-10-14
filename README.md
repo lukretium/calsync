@@ -27,7 +27,8 @@ Liste von Objekten, jede läuft als eigene Instanz. Bauen braucht `swiftc` (`xco
 
 Config-Felder: `name`, `workCalendars` (erster bekommt die Blocker), `hubCalendar`,
 optional `blockFrom` (Hub-Kalender als Blocker-Quelle, Default `hubCalendar`),
-`copyTitles` (Default true, false = nur `busyTitle`-Blöcke), `busyTitle`, `blockerTitle`, `days` (Default 30), `includeAllDay` (Default false).
+`copyTitles` (Default true, false = nur `busyTitle`-Blöcke), `busyTitle`, `blockerTitle`, `blockerTitles` (Default false, true = Termine anderer
+Kunden mit Titel statt als Blocker, z.B. im eigenen Firmenkalender), `days` (Default 30), `includeAllDay` (Default false).
 
 Abgelehnte, abgesagte, als "frei" markierte und ganztägige Termine werden ignoriert,
 Blocker (und Busy-Blöcke ohne `copyTitles`) werden bei Überlappung zusammengefasst.

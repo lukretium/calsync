@@ -1,0 +1,7 @@
+#!/bin/bash
+# Startet CalSync über LaunchServices, damit die Kalenderfreigabe an der App hängt
+# (und nicht am Terminal). Ausgabe landet trotzdem hier.
+APP="$HOME/Applications/CalSync.app"
+OUT=$(mktemp)
+open -W -n --stdout "$OUT" --stderr "$OUT" "$APP" --args "$@"
+cat "$OUT"; rm -f "$OUT"

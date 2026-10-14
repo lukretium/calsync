@@ -1,0 +1,6 @@
+{
+  "name": "Kunde D",
+  "workCalendars": ["Exchange/Kalender"],
+  "hubCalendar": "Google/you@gmail.com",
+  "days": 30
+}

@@ -22,6 +22,7 @@ struct Config: Codable {
                                      // ihren Titel ("DM · ..."), private Termine bleiben "Blocker"
     var days: Int?                   // Zeitfenster ab heute, Default 30
     var includeAllDay: Bool?         // Default false
+    var ignore: [String]?            // Kundentermine, deren Titel einen dieser Texte enthält, nicht spiegeln
 }
 
 let configPath = ProcessInfo.processInfo.environment["CALSYNC_CONFIG"].map { URL(fileURLWithPath: $0) }
@@ -166,6 +167,7 @@ func sync(_ cfg: Config, dryRun: Bool) {
     let workEvents = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: work))
     let busySlots = workEvents
         .filter { marker($0) == nil && blocksTime($0, includeAllDay: allDay) }
+        .filter { e in !(cfg.ignore ?? []).contains { e.title?.localizedCaseInsensitiveContains($0) == true } }
         .map { Slot(start: $0.startDate, end: $0.endDate, title: "\(cfg.name) · \($0.title ?? "")") }
     let busy = cfg.copyTitles ?? true
         ? busySlots

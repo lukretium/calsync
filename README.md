@@ -22,7 +22,8 @@ vi ~/.config/calsync/config.json
 ```
 
 Kalender per `Account/Kalender` oder bei Mehrdeutigkeit per ID aus `./calsync list`.
-`name` muss pro Mac eindeutig sein. Bauen braucht `swiftc` (`xcode-select --install`).
+`name` muss eindeutig sein. Mehrere Kundenkalender auf einem Mac: Config als
+Liste von Objekten, jede läuft als eigene Instanz. Bauen braucht `swiftc` (`xcode-select --install`).
 
 Config-Felder: `name`, `workCalendars` (erster bekommt die Blocker), `hubCalendar`,
 optional `blockFrom` (Hub-Kalender als Blocker-Quelle, Default `hubCalendar`),

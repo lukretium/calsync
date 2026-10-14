@@ -183,7 +183,7 @@ func sync(_ cfg: Config, dryRun: Bool) {
     if !dryRun {
         do { try store.commit() } catch { fail("Commit fehlgeschlagen: \(error.localizedDescription)") }
     }
-    log("\(dryRun ? "[dry-run] " : "")\(ref(hub)): +\(bc) -\(bd) | \(ref(work[0])): +\(kc) -\(kd)")
+    log("\(dryRun ? "[dry-run] " : "")\(cfg.name): \(ref(hub)): +\(bc) -\(bd) | \(ref(work[0])): +\(kc) -\(kd)")
 }
 
 /// Entfernt alle von dieser Instanz angelegten Events, auch in der Vergangenheit und Zukunft.
@@ -203,12 +203,14 @@ func clean(_ cfg: Config) {
         from = to
     }
     try? store.commit()
-    log("clean: \(n) Events entfernt")
+    log("clean \(cfg.name): \(n) Events entfernt")
 }
 
-func loadConfig() -> Config {
+/// Ein Objekt oder eine Liste: mehrere Kundenkalender auf einem Mac laufen als eigene Instanzen.
+func loadConfigs() -> [Config] {
     guard let data = try? Data(contentsOf: configPath) else { fail("Keine Config unter \(configPath.path)") }
-    do { return try JSONDecoder().decode(Config.self, from: data) }
+    if let one = try? JSONDecoder().decode(Config.self, from: data) { return [one] }
+    do { return try JSONDecoder().decode([Config].self, from: data) }
     catch { fail("Config ungültig: \(error)") }
 }
 
@@ -224,9 +226,9 @@ case "list":
         print("\(ref(c))\t\(c.allowsContentModifications ? "rw" : "ro")\t\(c.calendarIdentifier)")
     }
 case "sync":
-    sync(loadConfig(), dryRun: args.contains("--dry-run"))
+    for cfg in loadConfigs() { sync(cfg, dryRun: args.contains("--dry-run")) }
 case "clean":
-    clean(loadConfig())
+    for cfg in loadConfigs() { clean(cfg) }
 default:
     print("usage: calsync [list | sync [--dry-run] | clean]")
     exit(2)

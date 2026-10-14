@@ -96,6 +96,17 @@ func blocksTime(_ e: EKEvent, includeAllDay: Bool) -> Bool {
     return e.endDate > e.startDate
 }
 
+// MARK: - Marker
+
+// Eigene Events erkennt calsync daran, dass die Notizen exakt dem Marker entsprechen und es
+// keine Teilnehmer gibt. Ein bloßes "enthält" würde fremde Einladungen, die den Marker-Text
+// im Body tragen, als eigene behandeln und beim Abgleich löschen.
+func marker(_ e: EKEvent) -> String? {
+    guard !e.hasAttendees, let n = e.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+          n.hasPrefix("calsync:") else { return nil }
+    return n
+}
+
 // MARK: - Sync
 
 struct Window { let start: Date; let end: Date }
@@ -103,7 +114,7 @@ struct Window { let start: Date; let end: Date }
 /// Bringt die von uns verwalteten Events (Marker `tag`) in `target` auf den Stand `desired`.
 func reconcile(target: EKCalendar, tag: String, desired: [Slot], window: Window, dryRun: Bool) -> (Int, Int) {
     let pred = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [target])
-    let existing = store.events(matching: pred).filter { $0.notes?.contains(tag) == true }
+    let existing = store.events(matching: pred).filter { marker($0) == tag }
 
     var byKey: [String: EKEvent] = [:]
     var remove: [EKEvent] = []
@@ -152,7 +163,7 @@ func sync(_ cfg: Config, dryRun: Bool) {
     // Kunde -> Hub: alles außer gespiegelten Events (egal von wem)
     let workEvents = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: work))
     let busySlots = workEvents
-        .filter { $0.notes?.contains("calsync:") != true && blocksTime($0, includeAllDay: allDay) }
+        .filter { marker($0) == nil && blocksTime($0, includeAllDay: allDay) }
         .map { Slot(start: $0.startDate, end: $0.endDate, title: "\(cfg.name) · \($0.title ?? "")") }
     let busy = cfg.copyTitles ?? true
         ? busySlots
@@ -162,7 +173,7 @@ func sync(_ cfg: Config, dryRun: Bool) {
     let hubEvents = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: blockSources))
     // Richtung Kunde nie Titel: weder private noch die anderer Kunden
     let blocks = merge(hubEvents
-        .filter { $0.notes?.contains(busyTag) != true && blocksTime($0, includeAllDay: allDay) }
+        .filter { marker($0) != busyTag && blocksTime($0, includeAllDay: allDay) }
         .map { Slot(start: $0.startDate, end: $0.endDate, title: "") }, title: cfg.blockerTitle ?? "Blocker")
 
     let (bc, bd) = reconcile(target: hub, tag: busyTag, desired: busy, window: window, dryRun: dryRun)
@@ -186,7 +197,7 @@ func clean(_ cfg: Config) {
     while from < until {
         let to = Calendar.current.date(byAdding: .year, value: 1, to: from)!
         for e in store.events(matching: store.predicateForEvents(withStart: from, end: to, calendars: calendars))
-        where tags.contains(where: { e.notes?.contains($0) == true }) {
+        where marker(e).map(tags.contains) == true {
             if (try? store.remove(e, span: .thisEvent, commit: false)) != nil { n += 1 }
         }
         from = to

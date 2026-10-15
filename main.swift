@@ -1,5 +1,5 @@
-// calsync: spiegelt Termine zwischen einem Kundenkalender und einem Hub-Kalender (Google)
-// (im Google-Hub mit Kundenname und Termintitel, im Kundenkalender als neutraler Blocker). Läuft lokal über EventKit, keine APIs, kein OAuth.
+// calsync: spiegelt Termine zwischen einem Kundenkalender und dem eigenen Firmenkalender (Hub)
+// (im Hub mit Kundenname und Termintitel, im Kundenkalender als neutraler Blocker). Läuft lokal über EventKit, keine APIs, kein OAuth.
 //
 //   Kunde -> Hub:  "<name> · <Titel>" (Marker calsync:busy:<name>)
 //   Hub -> Kunde:  "Blocker"         (Marker calsync:block:<name>)
@@ -13,13 +13,8 @@ import Foundation
 struct Config: Codable {
     var name: String                 // z.B. "Kunde D", muss pro Mac eindeutig sein
     var workCalendars: [String]      // "Account/Kalender" oder Kalender-ID
-    var hubCalendar: String          // Google-Kalender, in den Busy-Blöcke geschrieben werden
-    var blockFrom: [String]?         // Hub-Kalender, aus denen Blocker entstehen (Default: hubCalendar)
-    var copyTitles: Bool?            // Default true: "<name> · <Titel>" statt eines Busy-Blocks
-    var busyTitle: String?           // Default "Busy · <name>" (nur ohne copyTitles)
-    var blockerTitle: String?        // Default "Blocker"
-    var blockerTitles: Bool?         // Default false: true = gespiegelte Termine anderer Kunden behalten
-                                     // ihren Titel ("DM · ..."), private Termine bleiben "Blocker"
+    var hubCalendar: String          // Firmenkalender: Ziel der Kundentermine, Quelle der Blocker
+    var copyTitles: Bool?            // Default true: "<name> · <Titel>" statt "Busy · <name>"
     var days: Int?                   // Zeitfenster ab heute, Default 30
     var includeAllDay: Bool?         // Default false
     var ignore: [String]?            // Kundentermine, deren Titel einen dieser Texte enthält, nicht spiegeln
@@ -153,7 +148,6 @@ func reconcile(target: EKCalendar, tag: String, desired: [Slot], window: Window,
 func sync(_ cfg: Config, dryRun: Bool) {
     let work = cfg.workCalendars.map(resolve)
     let hub = resolve(cfg.hubCalendar)
-    let blockSources = (cfg.blockFrom ?? [cfg.hubCalendar]).map(resolve)
     let busyTag = "calsync:busy:\(cfg.name)"
     let blockTag = "calsync:block:\(cfg.name)"
     let allDay = cfg.includeAllDay ?? false
@@ -171,18 +165,13 @@ func sync(_ cfg: Config, dryRun: Bool) {
         .map { Slot(start: $0.startDate, end: $0.endDate, title: "\(cfg.name) · \($0.title ?? "")") }
     let busy = cfg.copyTitles ?? true
         ? busySlots
-        : merge(busySlots, title: cfg.busyTitle ?? "Busy · \(cfg.name)")
+        : merge(busySlots, title: "Busy · \(cfg.name)")
 
-    // Hub -> Kunde: alles außer unseren eigenen Busy-Blöcken (Blöcke anderer Kunden zählen mit)
-    let hubEvents = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: blockSources))
-    // Richtung Kunde standardmäßig keine Titel. Private Termine nie, die anderer Kunden nur mit blockerTitles.
-    let hubBusy = hubEvents.filter { marker($0) != busyTag && blocksTime($0, includeAllDay: allDay) }
-    let titled = cfg.blockerTitles ?? false
-        ? hubBusy.filter { marker($0) != nil }.map { Slot(start: $0.startDate, end: $0.endDate, title: $0.title ?? "") }
-        : []
-    let blocks = titled + merge(hubBusy
-        .filter { !(cfg.blockerTitles ?? false) || marker($0) == nil }
-        .map { Slot(start: $0.startDate, end: $0.endDate, title: "") }, title: cfg.blockerTitle ?? "Blocker")
+    // Hub -> Kunde: alles außer unseren eigenen Busy-Blöcken (Blöcke anderer Kunden zählen mit), ohne Titel
+    let hubEvents = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: [hub]))
+    let blocks = merge(hubEvents
+        .filter { marker($0) != busyTag && blocksTime($0, includeAllDay: allDay) }
+        .map { Slot(start: $0.startDate, end: $0.endDate, title: "") }, title: "Blocker")
 
     let (bc, bd) = reconcile(target: hub, tag: busyTag, desired: busy, window: window, dryRun: dryRun)
     // Blocker nur in den ersten Kundenkalender schreiben, die anderen sind reine Quellen

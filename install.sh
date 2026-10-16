@@ -1,5 +1,6 @@
 #!/bin/bash
-# ./install.sh          App nach ~/Applications, Kalenderzugriff anfragen, Config-Vorlage anlegen
+# ./install.sh          App bauen (falls Quellcode neuer), nach ~/Applications, Kalenderzugriff
+#                       anfragen, Config-Vorlage anlegen. Auch für Updates nach git pull.
 # ./install.sh enable   Hintergrund-Sync alle 10 Minuten aktivieren
 # ./install.sh disable  Hintergrund-Sync stoppen
 set -euo pipefail
@@ -11,7 +12,8 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 case "${1:-install}" in
 install)
-  if [ ! -d build/CalSync.app ]; then
+  BIN=build/CalSync.app/Contents/MacOS/calsync
+  if [ ! -f "$BIN" ] || [ main.swift -nt "$BIN" ] || [ Info.plist -nt "$BIN" ]; then
     command -v swiftc >/dev/null || { echo "swiftc fehlt: erst 'xcode-select --install', dann nochmal."; exit 1; }
     echo "Baue CalSync (dauert ca. 1 Minute) ..."
     ./build.sh

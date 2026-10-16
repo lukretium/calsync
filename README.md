@@ -114,6 +114,16 @@ Schleifen, auch wenn mehrere Macs am selben Firmenkalender hängen.
 - **Verzögerung:** Ein Termin braucht vom Kunden-Mac bis aufs Handy oder in den anderen
   Kalender realistisch 10 bis 30 Minuten (Kalender-Sync, calsync-Takt, Exchange-Abruf).
 
+## Update
+
+```sh
+git pull && ./install.sh
+```
+
+`install.sh` baut neu, wenn `main.swift` oder `Info.plist` neuer sind als die gebaute App.
+Ein laufender Hintergrund-Sync nimmt die neue Version beim nächsten Lauf automatisch, ein
+erneutes `enable` ist nicht nötig. Ob er läuft: `launchctl list | grep calsync`.
+
 ## Weg damit
 
 ```sh

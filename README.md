@@ -93,6 +93,28 @@ Abgelehnte, abgesagte, als "frei" markierte und ganztägige Termine werden über
 Blocker werden bei Überlappung zusammengefasst. Private Termine blockieren Kunden, wenn sie
 im Firmenkalender stehen.
 
+## Läuft es?
+
+Jede Instanz schreibt nach jedem erfolgreichen Lauf einen Heartbeat in den Firmenkalender:
+einen Eintrag am 1.1.2000, Titel `calsync <name> <Zeitpunkt>`, als "frei" markiert. Weil alle
+Kunden-Macs in denselben Firmenkalender schreiben, sieht man von jedem Rechner aus, wer zuletzt
+wann gelaufen ist:
+
+```sh
+./calsync status <Firmenkalender>   # z.B. "DM: letzter Lauf vor 4 Min."
+```
+
+Auf dem Rechner, an dem man täglich sitzt, prüft ein Wächter das alle 15 Minuten und meldet
+sich per macOS-Mitteilung, wenn eine Instanz werktags zwischen 8 und 18 Uhr länger als 30
+Minuten still ist (Agent aus, Kunden-Mac zugeklappt, Kalenderzugriff weg):
+
+```sh
+./install.sh watch <Firmenkalender-ID aus ./calsync list>   # "./install.sh watch off" stoppt ihn
+```
+
+Fehler wie fehlender Kalenderzugriff oder ein nicht gefundener Kalender kommen zusätzlich
+direkt auf dem Kunden-Mac als Mitteilung.
+
 ## Wie es funktioniert
 
 Jeder gespiegelte Eintrag trägt in den Notizen einen Marker (`calsync:busy:<name>` bzw.
@@ -131,5 +153,5 @@ erneutes `enable` ist nicht nötig. Ob er läuft: `launchctl list | grep calsync
 ```
 
 `clean` entfernt alle von dieser Instanz angelegten Einträge im Firmen- und im
-Kundenkalender. Beim Wechsel des `hubCalendar` vorher mit der alten Config ausführen, sonst
+Kundenkalender, auch den Heartbeat (sonst meldet der Wächter sie als still). Beim Wechsel des `hubCalendar` vorher mit der alten Config ausführen, sonst
 bleiben die alten Einträge liegen.

@@ -29,8 +29,18 @@ func log(_ msg: String) {
     fflush(stdout)
 }
 
+/// macOS-Mitteilung, damit Fehler im Hintergrund nicht nur im Log landen.
+func notify(_ msg: String) {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    p.arguments = ["-e", "on run argv\ndisplay notification (item 1 of argv) with title \"calsync\"\nend run", msg]
+    try? p.run()
+    p.waitUntilExit()
+}
+
 func fail(_ msg: String) -> Never {
     log("FEHLER: \(msg)")
+    notify(msg)
     exit(1)
 }
 
@@ -103,6 +113,44 @@ func marker(_ e: EKEvent) -> String? {
     guard !e.hasAttendees, let n = e.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
           n.hasPrefix("calsync:") else { return nil }
     return n
+}
+
+// MARK: - Heartbeat
+
+// Jede Instanz hält im Hub einen Eintrag am 1.1.2000 aktuell, Titel "calsync <name> <Zeitpunkt>".
+// Weil alle Instanzen in denselben Hub schreiben, sieht man von jedem Rechner aus, wer zuletzt
+// wann erfolgreich gelaufen ist. Das Datum liegt weit außerhalb jedes Sync-Fensters.
+let heartbeatDay = ISO8601DateFormatter().date(from: "2000-01-01T12:00:00Z")!
+
+func heartbeats(in hub: EKCalendar) -> [EKEvent] {
+    let pred = store.predicateForEvents(withStart: heartbeatDay.addingTimeInterval(-86400),
+                                        end: heartbeatDay.addingTimeInterval(86400), calendars: [hub])
+    return store.events(matching: pred).filter { marker($0)?.hasPrefix("calsync:heartbeat:") == true }
+}
+
+func writeHeartbeat(hub: EKCalendar, name: String) {
+    let tag = "calsync:heartbeat:\(name)"
+    let existing = heartbeats(in: hub).filter { marker($0) == tag }
+    let e = existing.first ?? EKEvent(eventStore: store)
+    e.calendar = hub
+    e.title = "calsync \(name) \(ISO8601DateFormatter().string(from: Date()))"
+    e.startDate = heartbeatDay
+    e.endDate = heartbeatDay.addingTimeInterval(60)
+    e.availability = .free
+    e.notes = tag
+    do {
+        try store.save(e, span: .thisEvent, commit: true)
+        for dup in existing.dropFirst() { try store.remove(dup, span: .thisEvent, commit: true) }
+    } catch { log("  ! Heartbeat fehlgeschlagen: \(error.localizedDescription)") }
+}
+
+/// Letzter erfolgreicher Lauf je Instanz, aus den Heartbeats im Hub.
+func lastRuns(hub: EKCalendar) -> [(name: String, at: Date)] {
+    heartbeats(in: hub).compactMap { e in
+        guard let tag = marker(e), let ts = e.title?.split(separator: " ").last,
+              let at = ISO8601DateFormatter().date(from: String(ts)) else { return nil }
+        return (String(tag.dropFirst("calsync:heartbeat:".count)), at)
+    }.sorted { $0.name < $1.name }
 }
 
 // MARK: - Sync
@@ -179,6 +227,7 @@ func sync(_ cfg: Config, dryRun: Bool) {
 
     if !dryRun {
         do { try store.commit() } catch { fail("Commit fehlgeschlagen: \(error.localizedDescription)") }
+        writeHeartbeat(hub: hub, name: cfg.name)
     }
     log("\(dryRun ? "[dry-run] " : "")\(cfg.name): \(ref(hub)): +\(bc) -\(bd) | \(ref(work[0])): +\(kc) -\(kd)")
 }
@@ -199,8 +248,32 @@ func clean(_ cfg: Config) {
         }
         from = to
     }
+    for e in heartbeats(in: calendars[0]) where marker(e) == "calsync:heartbeat:\(cfg.name)" {
+        if (try? store.remove(e, span: .thisEvent, commit: false)) != nil { n += 1 }
+    }
     try? store.commit()
     log("clean \(cfg.name): \(n) Events entfernt")
+}
+
+/// Prüft die Heartbeats aller Instanzen im Hub und meldet sich, wenn eine werktags zwischen
+/// 8 und 18 Uhr länger als `maxAge` Minuten still ist. Gedacht für den Rechner, an dem man sitzt.
+func watch(hub: EKCalendar, maxAge: Int, quiet: Bool) {
+    store.refreshSourcesIfNecessary()
+    let now = Date()
+    let cal = Calendar.current
+    let workTime = !cal.isDateInWeekend(now) && (8..<18).contains(cal.component(.hour, from: now))
+    let runs = lastRuns(hub: hub)
+    var stale: [String] = []
+    if runs.isEmpty {
+        log("keine Heartbeats in \(ref(hub))")
+        stale.append("keine Instanz meldet sich in \(ref(hub))")
+    }
+    for r in runs {
+        let min = Int(now.timeIntervalSince(r.at) / 60)
+        log("\(r.name): letzter Lauf vor \(min) Min. (\(r.at))")
+        if min > maxAge { stale.append("\(r.name) seit \(min) Min. still") }
+    }
+    if !quiet && workTime && !stale.isEmpty { notify(stale.joined(separator: ", ")) }
 }
 
 /// Ein Objekt oder eine Liste: mehrere Kundenkalender auf einem Mac laufen als eigene Instanzen.
@@ -226,7 +299,12 @@ case "sync":
     for cfg in loadConfigs() { sync(cfg, dryRun: args.contains("--dry-run")) }
 case "clean":
     for cfg in loadConfigs() { clean(cfg) }
+case "status", "watch":
+    // status: Ausgabe ohne Mitteilung. watch: zusätzlich Mitteilung, wenn eine Instanz still ist.
+    let rest = args.dropFirst().filter { !$0.hasPrefix("-") }
+    let hub = rest.first.map(resolve) ?? resolve(loadConfigs()[0].hubCalendar)
+    watch(hub: hub, maxAge: rest.dropFirst().first.flatMap { Int($0) } ?? 30, quiet: cmd == "status")
 default:
-    print("usage: calsync [list | sync [--dry-run] | clean]")
+    print("usage: calsync [list | sync [--dry-run] | clean | status [Kalender] | watch Kalender [Minuten]]")
     exit(2)
 }

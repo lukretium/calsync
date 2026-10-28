@@ -117,14 +117,14 @@ func marker(_ e: EKEvent) -> String? {
 
 // MARK: - Heartbeat
 
-// Jede Instanz hält im Hub einen Eintrag am 1.1.2000 aktuell, Titel "calsync <name> <Zeitpunkt>".
-// Weil alle Instanzen in denselben Hub schreiben, sieht man von jedem Rechner aus, wer zuletzt
-// wann erfolgreich gelaufen ist. Das Datum liegt weit außerhalb jedes Sync-Fensters.
-let heartbeatDay = ISO8601DateFormatter().date(from: "2000-01-01T12:00:00Z")!
-
+// Jede Instanz hält im Hub einen Eintrag heute 00:00 bis 00:01 aktuell, als "frei" markiert,
+// Titel "calsync <name> <Zeitpunkt>". Weil alle Instanzen in denselben Hub schreiben, sieht man
+// von jedem Rechner aus, wer zuletzt wann erfolgreich gelaufen ist. Er muss nah an heute liegen:
+// Apples Kalender holt bei Exchange nur Termine aus einem begrenzten Zeitraum um heute.
 func heartbeats(in hub: EKCalendar) -> [EKEvent] {
-    let pred = store.predicateForEvents(withStart: heartbeatDay.addingTimeInterval(-86400),
-                                        end: heartbeatDay.addingTimeInterval(86400), calendars: [hub])
+    let today = Calendar.current.startOfDay(for: Date())
+    let pred = store.predicateForEvents(withStart: today.addingTimeInterval(-7 * 86400),
+                                        end: today.addingTimeInterval(2 * 86400), calendars: [hub])
     return store.events(matching: pred).filter { marker($0)?.hasPrefix("calsync:heartbeat:") == true }
 }
 
@@ -134,8 +134,8 @@ func writeHeartbeat(hub: EKCalendar, name: String) {
     let e = existing.first ?? EKEvent(eventStore: store)
     e.calendar = hub
     e.title = "calsync \(name) \(ISO8601DateFormatter().string(from: Date()))"
-    e.startDate = heartbeatDay
-    e.endDate = heartbeatDay.addingTimeInterval(60)
+    e.startDate = Calendar.current.startOfDay(for: Date())
+    e.endDate = e.startDate.addingTimeInterval(60)
     e.availability = .free
     e.notes = tag
     do {

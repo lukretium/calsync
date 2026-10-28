@@ -96,9 +96,9 @@ im Firmenkalender stehen.
 ## Läuft es?
 
 Jede Instanz schreibt nach jedem erfolgreichen Lauf einen Heartbeat in den Firmenkalender:
-einen Eintrag am 1.1.2000, Titel `calsync <name> <Zeitpunkt>`, als "frei" markiert. Weil alle
-Kunden-Macs in denselben Firmenkalender schreiben, sieht man von jedem Rechner aus, wer zuletzt
-wann gelaufen ist:
+einen Eintrag heute 00:00 bis 00:01, Titel `calsync <name> <Zeitpunkt>`, als "frei"
+markiert. Weil alle Kunden-Macs in denselben Firmenkalender schreiben, sieht man von jedem
+Rechner aus, wer zuletzt wann gelaufen ist:
 
 ```sh
 ./calsync status <Firmenkalender>   # z.B. "DM: letzter Lauf vor 4 Min."
